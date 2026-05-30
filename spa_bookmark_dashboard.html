@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="ja" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookmark Dashboard</title>
+  
+  <!-- Bootstrap 5 CSS CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  
+  <!-- Marked.js CDN (for Markdown rendering) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    :root {
+      --glass-bg: rgba(33, 37, 41, 0.75);
+      --glass-blur: blur(12px);
+      --glass-border: rgba(255, 255, 255, 0.08);
+    }
+    
+    [data-bs-theme="light"] {
+      --glass-bg: rgba(255, 255, 255, 0.8);
+      --glass-border: rgba(0, 0, 0, 0.08);
+    }
+
+    body {
+      min-height: 100vh;
+      background-position: center;
+      background-size: cover;
+      background-attachment: fixed;
+      transition: background-image 0.5s ease, background-color 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* グラスモルフィズム（すりガラス効果）デザイン */
+    .glass-panel {
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden; /* 画像のはみ出しを防ぐ */
+    }
+    [data-bs-theme="light"] .glass-card {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .glass-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    [data-bs-theme="light"] .glass-card:hover {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.15);
+    }
+
+    /* エディタビューがアクティブな際に画面全体にフィットさせる親パネル */
+    .editor-fullscreen-panel {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 210px); /* 2段ヘッダー分を引いた計算高さ */
+      min-height: 400px;
+    }
+
+    /* 編集領域（Textarea）を親パネルの高さ限界まで自動的に引き伸ばす */
+    .editor-textarea {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 0.95rem;
+      resize: none; /* 画面に自動追従するため手動リサイズは不要 */
+      width: 100%;
+      height: 100% !important; /* 親の高さを100%継承 */
+    }
+
+    /* アクティブなタブのカスタマイズ */
+    .nav-pills .nav-link {
+      color: inherit;
+      border-radius: 10px;
+      transition: all 0.2s;
+    }
+    .nav-pills .nav-link.active {
+      background-color: var(--bs-primary);
+      box-shadow: 0 4px 12px rgba(var(--bs-primary-rgb), 0.3);
+    }
+
+    /* 背景選択サークル */
+    .bg-thumbnail {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.2s;
+      background-size: cover;
+      background-position: center;
+    }
+    .bg-thumbnail:hover {
+      transform: scale(1.15);
+    }
+    .bg-thumbnail.active {
+      border-color: #fff;
+      box-shadow: 0 0 8px rgba(255,255,255,0.5);
+    }
+
+    /* テーブル表示のカスタマイズ */
+    .custom-table {
+      --bs-table-bg: transparent;
+      --bs-table-hover-bg: rgba(255, 255, 255, 0.03);
+      --bs-table-border-color: var(--glass-border);
+      color: inherit;
+    }
+    [data-bs-theme="light"] .custom-table {
+      --bs-table-hover-bg: rgba(0, 0, 0, 0.02);
+    }
+    .custom-table th {
+      border-bottom: 2px solid var(--glass-border) !important;
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .custom-table td {
+      border-bottom: 1px solid var(--glass-border);
+      padding: 0.85rem 0.75rem;
+    }
+    .notes-cell p {
+      margin-bottom: 0;
+    }
+
+    /* アイコン変更可能なセルのホバー演出 */
+    .icon-clickable {
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
+    }
+    .icon-clickable .edit-badge {
+      opacity: 0;
+      transform: translate(50%, -50%) scale(0.6);
+      transition: all 0.2s ease;
+    }
+    .icon-clickable:hover .edit-badge {
+      opacity: 1;
+      transform: translate(50%, -50%) scale(1);
+    }
+    .icon-clickable:hover .icon-box {
+      background-color: rgba(var(--bs-primary-rgb), 0.2) !important;
+      transform: scale(1.1);
+    }
+
+    /* モーダル内のアイコン選択ボタン */
+    .icon-select-btn {
+      cursor: pointer;
+      border: 1px solid var(--glass-border);
+      background: rgba(255, 255, 255, 0.02);
+      transition: all 0.2s;
+    }
+    .icon-select-btn:hover {
+      background: var(--bs-primary);
+      color: #fff !important;
+      transform: scale(1.15);
+      border-color: var(--bs-primary);
+      box-shadow: 0 4px 12px rgba(var(--bs-primary-rgb), 0.3);
+    }
+    [data-bs-theme="light"] .icon-select-btn:hover {
+      color: #fff !important;
+    }
+
+    /* ★ 完璧な等幅マルチグリッドを表現する CSS Grid 調整 */
+    .dynamic-tile-grid {
+      display: grid;
+      gap: 0.75rem;
+      /* デフォルト(スマホなど狭い幅)は2列に制限 */
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    
+    /* 横幅に合わせて段階的にタイル数を調整して文字潰れを防ぐ */
+    @media (min-width: 576px) {
+      .dynamic-tile-grid {
+        grid-template-columns: repeat(min(3, var(--tile-cols)), minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 768px) {
+      .dynamic-tile-grid {
+        grid-template-columns: repeat(min(5, var(--tile-cols)), minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 1200px) {
+      .dynamic-tile-grid {
+        grid-template-columns: repeat(var(--tile-cols), minmax(0, 1fr));
+      }
+    }
+
+    /* タイル画像・アイコン表示エリアのスタイリング */
+    .tile-visual-box {
+      width: 100%;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--glass-border);
+      overflow: hidden;
+      position: relative;
+    }
+    [data-bs-theme="light"] .tile-visual-box {
+      background: rgba(0,0,0,0.01);
+    }
+    .tile-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s ease;
+    }
+    .glass-card:hover .tile-img {
+      transform: scale(1.08);
+    }
+
+    /* カスタムスクロールバー */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+  </style>
+</head>
+<body id="bodyBg">
+
+  <div class="container-fluid py-4 px-md-5 flex-grow-1 d-flex flex-column">
+    
+    <!-- ヘッダーエリア (2段式のフレックスコラムレイアウト) -->
+    <header class="glass-panel p-4 mb-4 d-flex flex-column gap-3 flex-shrink-0">
+      
+      <!-- 上段: タイトルロゴ ＆ 操作ボタン・コントロール設定 -->
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="p-2 bg-primary bg-gradient text-white rounded-3 shadow">
+            <i class="bi bi-bookmark-heart-fill fs-3"></i>
+          </div>
+          <div>
+            <h1 class="h3 mb-0 fw-bold">Bookmark Dashboard</h1>
+            <p class="text-muted small mb-0">Markdownで紡ぐ、あなただけのポータル</p>
+          </div>
+        </div>
+
+        <!-- コントロール群 -->
+        <div class="d-flex flex-wrap align-items-center gap-3">
+          <!-- 並び替え（ソート順）セレクトボックス -->
+          <div class="d-flex align-items-center gap-2">
+            <label for="sortSelect" class="small text-muted text-nowrap"><i class="bi bi-sort-down-alt"></i> 並び替え:</label>
+            <select id="sortSelect" class="form-select form-select-sm rounded-pill" style="width: 130px;">
+              <option value="default">記述順 (標準)</option>
+              <option value="title">名前順 (A-Z)</option>
+              <option value="clicks">クリック数順</option>
+            </select>
+          </div>
+
+          <!-- レイアウト切り替え -->
+          <div class="btn-group" role="group" aria-label="Layout mode">
+            <input type="radio" class="btn-check" name="layoutMode" id="modeGrid" checked>
+            <label class="btn btn-outline-secondary" for="modeGrid" title="テーブル表示 (詳細)"><i class="bi bi-list-columns-reverse"></i></label>
+            
+            <input type="radio" class="btn-check" name="layoutMode" id="modeTile">
+            <label class="btn btn-outline-secondary" for="modeTile" title="タイル表示 (シンプル)"><i class="bi bi-grid-fill"></i></label>
+          </div>
+
+          <!-- 1列あたりのタイル数選択 (タイル表示専用) -->
+          <div class="d-flex align-items-center gap-2">
+            <label for="tileColumnsSelect" class="small text-muted text-nowrap"><i class="bi bi-columns"></i> タイル列数:</label>
+            <select id="tileColumnsSelect" class="form-select form-select-sm rounded-pill" style="width: 85px;">
+              <option value="2">2 列</option>
+              <option value="3">3 列</option>
+              <option value="4">4 列</option>
+              <option value="5">5 列</option>
+              <option value="6">6 列</option>
+              <option value="7">7 列</option>
+              <option value="8">8 列</option>
+              <option value="9">9 列</option>
+              <option value="10">10 列</option>
+            </select>
+          </div>
+
+          <!-- エディタ/ダッシュボード 完全表示切り替えトグルボタン -->
+          <button id="toggleEditorHeaderBtn" class="btn btn-outline-primary" title="画面の表示切替" onclick="toggleEditor()">
+            <i class="bi bi-pencil-square me-1"></i>エディタを開く
+          </button>
+
+          <!-- ダーク/ライトモード切り替え -->
+          <button id="themeToggle" class="btn btn-outline-secondary" title="テーマ切り替え">
+            <i class="bi bi-sun-fill" id="themeIcon"></i>
+          </button>
+
+          <!-- 背景選択パネル -->
+          <div class="d-flex gap-2 align-items-center bg-dark bg-opacity-25 p-1 rounded-pill px-2 border border-secondary border-opacity-25">
+            <div class="bg-thumbnail active" id="bgThumb0" style="background-color: #121212;" onclick="changeBg('none', 0)" title="単色背景"></div>
+            <div class="bg-thumbnail" id="bgThumb1" style="background-image: url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=600&auto=format&fit=crop&q=60');" onclick="changeBg('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1600&auto=format&fit=crop&q=80', 1)" title="プリセット1"></div>
+            <div class="bg-thumbnail" id="bgThumb2" style="background-image: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=60');" onclick="changeBg('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1600&auto=format&fit=crop&q=80', 2)" title="プリセット2"></div>
+            <div class="bg-thumbnail" id="bgThumb3" style="background-image: url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=60');" onclick="changeBg('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&auto=format&fit=crop&q=80', 3)" title="プリセット3"></div>
+            
+            <!-- 独自画像アップロード用サムネイル -->
+            <div class="bg-thumbnail d-flex align-items-center justify-content-center border border-dashed text-muted position-relative" 
+                 id="bgThumb4" 
+                 onclick="triggerBgUpload()" 
+                 ondblclick="forceBgUploadSelect()"
+                 title="クリックでカスタム背景適用 / ダブルクリックで画像変更">
+              <i class="bi bi-plus-lg" id="uploadIcon" style="font-size: 0.9rem;"></i>
+            </div>
+            <!-- 隠しファイルインプット -->
+            <input type="file" id="bgFileInput" accept="image/*" class="d-none" onchange="handleBgUpload(event)">
+          </div>
+        </div>
+      </div>
+
+      <!-- 下段: 画面全幅（最大サイズ）に広がる検索エリア -->
+      <div class="position-relative w-100 mt-2">
+        <i class="bi bi-search position-absolute top-50 start-3 translate-middle-y text-muted ms-1" style="font-size: 1.1rem;"></i>
+        <input type="text" id="searchInput" class="form-control ps-5 rounded-pill py-2 border-secondary border-opacity-25" placeholder="登録したすべてのブックマークから、タイトル・URL・備考を瞬時に横断検索できます...">
+      </div>
+      
+    </header>
+
+    <!-- メインコンテンツ -->
+    <div class="row g-4 flex-grow-1">
+      
+      <!-- [エディタビュー] -->
+      <div class="col-12 d-none" id="editorContainer">
+        <div class="glass-panel p-4 editor-fullscreen-panel">
+          <div class="d-flex justify-content-between align-items-center mb-3 flex-shrink-0">
+            <h5 class="mb-0 fw-bold d-flex align-items-center gap-2">
+              <i class="bi bi-pencil-square text-primary"></i>
+              Markdownエディタ（編集モード）
+            </h5>
+            <button class="btn btn-sm btn-primary rounded-pill px-3" onclick="toggleEditor()">
+              <i class="bi bi-eye-fill me-1"></i>編集を終了してダッシュボードを見る
+            </button>
+          </div>
+          
+          <!-- ヒント枠 -->
+          <div class="alert alert-info py-2 px-3 mb-3 flex-shrink-0" style="font-size: 0.82rem;">
+            <i class="bi bi-info-circle-fill me-1"></i> <strong>書き方のコツ：</strong> 
+            <code># カテゴリ名</code> でタブ作成 | 
+            <code>- [タイトル](URL) {icon: アイコン名} {img: 画像URL/Base64} : 備考</code> でリンクを作成。
+          </div>
+
+          <!-- エディタ本体 -->
+          <div class="flex-grow-1 mb-3 position-relative">
+            <textarea id="markdownInput" class="form-control editor-textarea" placeholder="# 💡 ここにカテゴリやリンクを書いてください（例）&#10;# マイリンク&#10;- [Google](https://google.com) {icon: google} {img: https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=300} : 検索エンジン"></textarea>
+          </div>
+          
+          <div class="d-flex justify-content-end align-items-center flex-shrink-0">
+            <span class="text-muted small align-self-center" id="saveStatus">
+              <i class="bi bi-cloud-check-fill text-success"></i> 自動保存済み
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- [ダッシュボードビュー] -->
+      <div class="col-12" id="dashboardContainer">
+        <div class="glass-panel p-4 h-100">
+          
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-secondary py-2 px-3" id="totalLinksBadge">全 0 個のリンク</span>
+            </div>
+            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="toggleEditor()">
+              <i class="bi bi-pencil-square me-1"></i>ブックマークを編集する
+            </button>
+          </div>
+
+          <!-- カテゴリタブ -->
+          <ul class="nav nav-pills mb-4 gap-2 border-bottom pb-3 border-secondary border-opacity-25" id="categoryTabs" role="tablist">
+            <!-- 動的生成されるタブ -->
+          </ul>
+
+          <!-- ブックマークリスト表示エリア -->
+          <div class="tab-content" id="categoryTabContent">
+            <!-- 動的生成されるコンテンツ -->
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- アイコン変更モーダル -->
+  <div class="modal fade" id="iconPickerModal" tabindex="-1" aria-labelledby="iconPickerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content glass-panel" style="background: var(--glass-bg); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border);">
+        <div class="modal-header border-bottom border-secondary border-opacity-25 pb-3">
+          <div class="w-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h5 class="modal-title fw-bold" id="iconPickerModalLabel">
+                <i class="bi bi-palette text-primary me-2"></i>アイコンを選択
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <!-- アイコン用リアルタイム検索窓 -->
+            <div class="position-relative">
+              <i class="bi bi-search position-absolute top-50 start-3 translate-middle-y text-muted ms-2" style="z-index: 5;"></i>
+              <input type="text" id="iconSearchInput" class="form-control form-control-sm ps-5 rounded-pill" placeholder="アイコン名で検索 (例: cloud, git, apple...)" style="z-index: 1;">
+            </div>
+          </div>
+        </div>
+        <div class="modal-body overflow-auto" style="max-height: 400px;">
+          <!-- 自由入力用プレビュー確認領域 -->
+          <div id="customIconPreviewBox" class="alert alert-primary py-2 px-3 mb-3 d-none align-items-center justify-content-between">
+            <span class="small"><i class="bi bi-info-circle-fill me-1"></i> 入力された名前のままでカスタム決定：</span>
+            <button class="btn btn-sm btn-primary rounded-pill px-3" id="customIconSelectBtn">
+              <i class="bi bi-question-lg" id="customIconPreview"></i> <span id="customIconNameText"></span>を適用
+            </button>
+          </div>
+
+          <p class="text-muted small mb-3 text-start" id="pickerInfoText">160種類以上の定番候補から選択、またはお好きなBootstrap Icons名を入力して決定できます。</p>
+          <div class="row row-cols-4 row-cols-sm-6 row-cols-md-8 g-2 text-center" id="iconGrid">
+            <!-- JavaScriptでアイコン一覧が動的挿入されます -->
+          </div>
+        </div>
+        <div class="modal-footer border-top border-secondary border-opacity-25">
+          <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap Bundle JS (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // サンプル用初期データを完全に排除
+    const defaultMarkdown = ``;
+
+    // 160種類以上の定番・主要Bootstrap Iconsを網羅
+    const AVAILABLE_ICONS = [
+      // Web / 一般
+      'globe', 'link-45deg', 'search', 'house', 'gear', 'gear-fill', 'tools', 'wrench',
+      'shield', 'shield-lock', 'lock', 'unlock', 'key', 'info-circle', 'question-circle',
+      'exclamation-triangle', 'bell', 'heart', 'heart-fill', 'star', 'star-fill', 'bookmark',
+      'bookmark-fill', 'bookmark-heart', 'tag', 'share', 'box-arrow-up-right', 'download',
+      
+      // テック / ハードウェア
+      'cpu', 'laptop', 'display', 'pc-display', 'tablet', 'phone', 'smartwatch', 'database',
+      'database-fill', 'server', 'terminal', 'code-slash', 'code', 'braces', 'file-code',
+      'router', 'wifi', 'bluetooth', 'broadcast', 'qr-code', 'lightning', 'usb',
+      
+      // ビジネス / オフィス
+      'briefcase', 'building', 'graph-up', 'graph-down', 'pie-chart', 'calculator',
+      'calendar', 'calendar-date', 'calendar-event', 'clipboard', 'clipboard-data',
+      'folder', 'folder-fill', 'folder-plus', 'archive', 'envelope', 'envelope-fill',
+      'printer', 'wallet2', 'credit-card', 'cash-stack', 'coin', 'journal-code',
+      'journal-text', 'file-text', 'file-earmark-pdf', 'file-earmark-excel', 'file-earmark-word',
+      
+      // コミュニケーション / SNS / IT企業
+      'chat', 'chat-dots', 'chat-quote', 'chat-text', 'people', 'person', 'person-fill',
+      'google', 'github', 'youtube', 'bootstrap', 'twitter', 'discord', 'telegram',
+      'facebook', 'instagram', 'linkedin', 'reddit', 'twitch', 'slack', 'whatsapp',
+      'apple', 'android2', 'windows', 'medium', 'pinterest', 'behance', 'dribbble',
+      
+      // メディア / アート
+      'image', 'images', 'camera', 'camera-video', 'play', 'play-fill', 'pause', 'stop',
+      'skip-forward', 'skip-backward', 'headphones', 'music-note', 'mic', 'volume-up',
+      'palette', 'paint-bucket', 'vector-pen', 'brush', 'activity', 'gem',
+      
+      // 生活 / 旅行 / フード
+      'cart', 'bag', 'gift', 'trophy', 'award', 'cup-hot', 'cup', 'glass-placeholder',
+      'egg-fried', 'compass', 'map', 'pin-angle', 'geo-alt', 'balloon', 'umbrella',
+      'sun', 'moon', 'cloud', 'cloud-rain', 'thermometer', 'hourglass', 'suit-spade',
+      'clock', 'train-front', 'car-front', 'airplane', 'bicycle', 'signpost-split',
+      
+      // 記号 / アクション
+      'arrow-right', 'arrow-left', 'arrow-up', 'arrow-down', 'check-lg', 'x-lg', 'plus-lg',
+      'dash-lg', 'pencil', 'pencil-fill', 'trash', 'eye', 'eye-fill', 'funnel', 'sort-down'
+    ];
+
+    // 状態管理
+    let state = {
+      markdown: localStorage.getItem('bookmark_md') || defaultMarkdown,
+      theme: localStorage.getItem('bookmark_theme') || 'dark',
+      bgIndex: parseInt(localStorage.getItem('bookmark_bg_idx') || '0'),
+      bgUrl: localStorage.getItem('bookmark_bg_url') || 'none',
+      customBg: localStorage.getItem('bookmark_custom_bg') || '', 
+      activeTabName: localStorage.getItem('bookmark_active_tab_name') || '', 
+      layout: localStorage.getItem('bookmark_layout') || 'grid', 
+      tileColumns: parseInt(localStorage.getItem('bookmark_tile_columns') || '4'), 
+      searchQuery: '',
+      editorVisible: localStorage.getItem('bookmark_editor_visible') === 'true',
+      sortBy: localStorage.getItem('bookmark_sort_by') || 'default'
+    };
+
+    let currentTarget = { catIndex: null, linkIndex: null };
+
+    // 初期化
+    window.addEventListener('DOMContentLoaded', () => {
+      const markdownInput = document.getElementById('markdownInput');
+      const searchInput = document.getElementById('searchInput');
+      const themeToggle = document.getElementById('themeToggle');
+      const tileColumnsSelect = document.getElementById('tileColumnsSelect');
+      const iconSearchInput = document.getElementById('iconSearchInput');
+      const sortSelect = document.getElementById('sortSelect');
+      
+      markdownInput.value = state.markdown;
+      tileColumnsSelect.value = state.tileColumns;
+      sortSelect.value = state.sortBy;
+      
+      // イベントリスナー
+      markdownInput.addEventListener('input', (e) => {
+        state.markdown = e.target.value;
+        saveState();
+        renderDashboard();
+      });
+
+      searchInput.addEventListener('input', (e) => {
+        state.searchQuery = e.target.value.toLowerCase();
+        renderDashboard();
+      });
+
+      themeToggle.addEventListener('click', toggleTheme);
+
+      tileColumnsSelect.addEventListener('change', (e) => {
+        state.tileColumns = parseInt(e.target.value);
+        saveState();
+        renderDashboard();
+      });
+
+      sortSelect.addEventListener('change', (e) => {
+        state.sortBy = e.target.value;
+        saveState();
+        renderDashboard();
+      });
+
+      document.getElementById('modeGrid').addEventListener('change', () => {
+        state.layout = 'grid';
+        saveState();
+        updateTileColumnsState();
+        renderDashboard();
+      });
+      document.getElementById('modeTile').addEventListener('change', () => {
+        state.layout = 'tile';
+        saveState();
+        updateTileColumnsState();
+        renderDashboard();
+      });
+
+      iconSearchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        renderIconGrid(query);
+      });
+
+      document.getElementById('customIconSelectBtn').addEventListener('click', () => {
+        const customName = iconSearchInput.value.trim().toLowerCase();
+        if (customName) {
+          selectIcon(customName);
+        }
+      });
+
+      if (state.layout === 'tile') {
+        document.getElementById('modeTile').checked = true;
+      } else {
+        document.getElementById('modeGrid').checked = true;
+      }
+
+      applyTheme();
+      applyBg();
+      applyEditorVisibility(); 
+      updateTileColumnsState();
+      renderDashboard();
+
+      document.getElementById('bgThumb4').addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        if (state.customBg && confirm('アップロードしたカスタム背景画像をクリアしますか？')) {
+          state.customBg = '';
+          if (state.bgIndex === 4) {
+            state.bgIndex = 0;
+            state.bgUrl = 'none';
+          }
+          saveState();
+          applyBg();
+        }
+      });
+    });
+
+    function saveState() {
+      const statusSpan = document.getElementById('saveStatus');
+      statusSpan.innerHTML = `<i class="bi bi-arrow-repeat text-warning spinner-border spinner-border-sm" role="status"></i> 保存中...`;
+      
+      localStorage.setItem('bookmark_md', state.markdown);
+      localStorage.setItem('bookmark_theme', state.theme);
+      localStorage.setItem('bookmark_bg_idx', state.bgIndex);
+      localStorage.setItem('bookmark_bg_url', state.bgUrl);
+      localStorage.setItem('bookmark_layout', state.layout);
+      localStorage.setItem('bookmark_tile_columns', state.tileColumns);
+      localStorage.setItem('bookmark_active_tab_name', state.activeTabName);
+      localStorage.setItem('bookmark_editor_visible', state.editorVisible);
+      localStorage.setItem('bookmark_sort_by', state.sortBy);
+      
+      if (state.customBg) {
+        try {
+          localStorage.setItem('bookmark_custom_bg', state.customBg);
+        } catch (e) {
+          console.error("Storage quota exceeded!", e);
+          state.customBg = '';
+          localStorage.removeItem('bookmark_custom_bg');
+        }
+      } else {
+        localStorage.removeItem('bookmark_custom_bg');
+      }
+
+      setTimeout(() => {
+        statusSpan.innerHTML = `<i class="bi bi-cloud-check-fill text-success"></i> 自動保存済み`;
+      }, 400);
+    }
+
+    function toggleTheme() {
+      state.theme = state.theme === 'dark' ? 'light' : 'dark';
+      applyTheme();
+      saveState();
+    }
+
+    function applyTheme() {
+      const html = document.documentElement;
+      const themeIcon = document.getElementById('themeIcon');
+      html.setAttribute('data-bs-theme', state.theme);
+      themeIcon.className = state.theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+    }
+
+    function changeBg(url, index) {
+      state.bgUrl = url;
+      state.bgIndex = index;
+      applyBg();
+      saveState();
+    }
+
+    function applyBg() {
+      const body = document.getElementById('bodyBg');
+      const customThumb = document.getElementById('bgThumb4');
+      const uploadIcon = document.getElementById('uploadIcon');
+
+      if (state.customBg) {
+        customThumb.style.backgroundImage = `url('${state.customBg}')`;
+        uploadIcon.className = 'bi bi-pencil-fill text-white'; 
+        uploadIcon.style.textShadow = '0px 1px 4px rgba(0,0,0,0.8)';
+      } else {
+        customThumb.style.backgroundImage = 'none';
+        uploadIcon.className = 'bi bi-plus-lg';
+      }
+
+      for (let i = 0; i < 5; i++) {
+        const thumb = document.getElementById(`bgThumb${i}`);
+        if (thumb) {
+          if (i === state.bgIndex) thumb.classList.add('active');
+          else thumb.classList.remove('active');
+        }
+      }
+
+      if (state.bgIndex === 4 && state.customBg) {
+        body.style.backgroundImage = `url('${state.customBg}')`;
+      } else if (state.bgUrl === 'none' || state.bgIndex === 0) {
+        body.style.backgroundImage = 'none';
+        body.style.backgroundColor = state.theme === 'dark' ? '#121212' : '#f8f9fa';
+      } else {
+        body.style.backgroundImage = `url('${state.bgUrl}')`;
+      }
+    }
+
+    function triggerBgUpload() {
+      if (state.customBg) {
+        state.bgIndex = 4;
+        applyBg();
+        saveState();
+      } else {
+        document.getElementById('bgFileInput').click();
+      }
+    }
+
+    function forceBgUploadSelect() {
+      document.getElementById('bgFileInput').click();
+    }
+
+    function handleBgUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+          state.customBg = compressedDataUrl;
+          state.bgIndex = 4;
+          applyBg();
+          saveState();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function toggleEditor() {
+      state.editorVisible = !state.editorVisible;
+      applyEditorVisibility();
+      saveState();
+    }
+
+    function applyEditorVisibility() {
+      const editor = document.getElementById('editorContainer');
+      const dashboard = document.getElementById('dashboardContainer');
+      const btn = document.getElementById('toggleEditorHeaderBtn');
+      
+      if (state.editorVisible) {
+        editor.classList.remove('d-none');
+        dashboard.classList.add('d-none');
+        btn.innerHTML = '<i class="bi bi-eye-fill me-1"></i>ダッシュボード';
+        btn.classList.replace('btn-outline-secondary', 'btn-outline-primary');
+        btn.classList.add('active');
+      } else {
+        editor.classList.add('d-none');
+        dashboard.classList.remove('d-none');
+        btn.innerHTML = '<i class="bi bi-pencil-square me-1"></i>エディタを開く';
+        btn.classList.replace('btn-outline-primary', 'btn-outline-secondary');
+        btn.classList.remove('active');
+      }
+    }
+
+    function updateTileColumnsState() {
+      const select = document.getElementById('tileColumnsSelect');
+      if (state.layout === 'tile') select.removeAttribute('disabled');
+      else select.setAttribute('disabled', 'true');
+    }
+
+    // Markdownパーサー (独自タグ {icon: ...} および {img: ...} の解析に対応)
+    function parseMarkdownToData(mdText) {
+      const lines = mdText.split('\n');
+      const categories = [];
+      let currentCategory = null;
+      let catCounter = 0;
+      let linkCounter = 0;
+
+      lines.forEach(line => {
+        const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+        if (headingMatch) {
+          currentCategory = {
+            id: 'cat-' + Math.random().toString(36).substr(2, 9),
+            name: headingMatch[2].trim(),
+            links: [],
+            originalIndex: catCounter++
+          };
+          categories.push(currentCategory);
+          linkCounter = 0;
+        } else {
+          const linkMatch = line.match(/^-\s+\[([^\]]+)\]\(([^)]+)\)(?:\s*\{icon:\s*([^}]+)\})?(?:\s*\{img:\s*([^}]+)\})?(?:\s*:\s*(.+))?$/);
+          if (linkMatch && currentCategory) {
+            currentCategory.links.push({
+              title: linkMatch[1],
+              url: linkMatch[2],
+              icon: linkMatch[3] ? linkMatch[3].trim() : 'link-45deg',
+              img: linkMatch[4] ? linkMatch[4].trim() : '',
+              notes: linkMatch[5] ? linkMatch[5].trim() : '',
+              originalIndex: linkCounter++
+            });
+          }
+        }
+      });
+      return categories;
+    }
+
+    function serializeDataToMarkdown(categories) {
+      let md = '';
+      categories.forEach((cat, cIdx) => {
+        if (cIdx > 0) md += '\n\n';
+        md += `# ${cat.name}\n`;
+        cat.links.forEach(link => {
+          const iconPart = link.icon && link.icon !== 'link-45deg' ? ` {icon: ${link.icon}}` : '';
+          const imgPart = link.img ? ` {img: ${link.img}}` : '';
+          const notesPart = link.notes ? ` : ${link.notes}` : '';
+          md += `- [${link.title}](${link.url})${iconPart}${imgPart}${notesPart}\n`;
+        });
+      });
+      return md;
+    }
+
+    function renderIconGrid(query = '') {
+      const grid = document.getElementById('iconGrid');
+      const customBox = document.getElementById('customIconPreviewBox');
+      const customPreview = document.getElementById('customIconPreview');
+      const customNameText = document.getElementById('customIconNameText');
+      
+      grid.innerHTML = '';
+      const filteredIcons = AVAILABLE_ICONS.filter(icon => icon.includes(query));
+
+      if (filteredIcons.length > 0) {
+        filteredIcons.forEach(icon => {
+          const col = document.createElement('div');
+          col.className = 'col';
+          col.innerHTML = `
+            <div class="icon-select-btn p-3 rounded-3 d-flex flex-column align-items-center h-100 justify-content-center" onclick="selectIcon('${icon}')" title="${icon}">
+              <i class="bi bi-${icon} fs-3 mb-1"></i>
+              <span class="small text-muted text-truncate w-100" style="font-size: 0.65rem;">${icon}</span>
+            </div>
+          `;
+          grid.appendChild(col);
+        });
+      } else {
+        grid.innerHTML = `
+          <div class="col-12 text-center py-4">
+            <i class="bi bi-emoji-expressionless fs-2 text-muted"></i>
+            <p class="text-muted small mt-2">候補リストの中に「${query}」に一致するアイコンはありませんでした。</p>
+          </div>
+        `;
+      }
+
+      if (query && !AVAILABLE_ICONS.includes(query)) {
+        customBox.classList.replace('d-none', 'd-flex');
+        customPreview.className = `bi bi-${query} fs-4 me-2 text-warning`;
+        customNameText.textContent = `"${query}"`;
+      } else {
+        customBox.classList.replace('d-flex', 'd-none');
+      }
+    }
+
+    function openIconPicker(catIndex, linkIndex) {
+      currentTarget.catIndex = catIndex;
+      currentTarget.linkIndex = linkIndex;
+      const searchInput = document.getElementById('iconSearchInput');
+      searchInput.value = '';
+      renderIconGrid('');
+      new bootstrap.Modal(document.getElementById('iconPickerModal')).show();
+    }
+
+    function selectIcon(iconName) {
+      if (currentTarget.catIndex !== null && currentTarget.linkIndex !== null) {
+        const categories = parseMarkdownToData(state.markdown);
+        categories[currentTarget.catIndex].links[currentTarget.linkIndex].icon = iconName;
+        state.markdown = serializeDataToMarkdown(categories);
+        document.getElementById('markdownInput').value = state.markdown;
+        saveState();
+        renderDashboard();
+        const modal = bootstrap.Modal.getInstance(document.getElementById('iconPickerModal'));
+        if (modal) modal.hide();
+      }
+    }
+
+    // ★ タイル表示用画像ロードエラーハンドラ（d-noneクラスを操作する安全なフォールバック）
+    function handleTileImageError(imgElement) {
+      imgElement.classList.add('d-none');
+      const fallbackIcon = imgElement.nextElementSibling;
+      if (fallbackIcon && fallbackIcon.tagName === 'I') {
+        fallbackIcon.classList.remove('d-none');
+      }
+    }
+
+    // ★ テーブル表示用画像ロードエラーハンドラ
+    function handleTableImageError(imgElement) {
+      imgElement.classList.add('d-none');
+      const fallbackIcon = imgElement.nextElementSibling;
+      if (fallbackIcon && fallbackIcon.tagName === 'I') {
+        fallbackIcon.classList.remove('d-none');
+      }
+    }
+
+    function getSafeIcon(iconName) {
+      return (!iconName || iconName === 'none') ? 'link-45deg' : iconName;
+    }
+
+    function incrementClick(url) {
+      let clicks = JSON.parse(localStorage.getItem('bookmark_clicks') || '{}');
+      clicks[url] = (clicks[url] || 0) + 1;
+      localStorage.setItem('bookmark_clicks', JSON.stringify(clicks));
+      renderDashboard();
+    }
+  </script>
+
+  <!-- HTML描画ロジック -->
+  <script>
+    function renderDashboard() {
+      const categories = parseMarkdownToData(state.markdown);
+      const tabsUl = document.getElementById('categoryTabs');
+      const tabContent = document.getElementById('categoryTabContent');
+      
+      tabsUl.innerHTML = '';
+      tabContent.innerHTML = '';
+
+      if (categories.length === 0) {
+        tabContent.innerHTML = `
+          <div class="text-center py-5">
+            <i class="bi bi-folder-x fs-1 text-muted"></i>
+            <p class="mt-3 text-muted">有効なデータがありません。ヘッダーの「エディタを開く」から独自のブックマークを記述してください。</p>
+          </div>
+        `;
+        document.getElementById('totalLinksBadge').textContent = `全 0 個のリンク`;
+        return;
+      }
+
+      const clickData = JSON.parse(localStorage.getItem('bookmark_clicks') || '{}');
+
+      let totalLinksCount = 0;
+      let firstVisibleTabName = '';
+
+      const filteredCategories = categories.map(cat => {
+        const linksWithClicks = cat.links.map(link => ({
+          ...link,
+          clicks: clickData[link.url] || 0
+        }));
+
+        const filteredLinks = linksWithClicks.filter(link => {
+          if (!state.searchQuery) return true;
+          return link.title.toLowerCase().includes(state.searchQuery) ||
+                 link.url.toLowerCase().includes(state.searchQuery) ||
+                 (link.notes && link.notes.toLowerCase().includes(state.searchQuery));
+        });
+
+        if (state.sortBy === 'title') {
+          filteredLinks.sort((a, b) => a.title.localeCompare(b.title, 'ja'));
+        } else if (state.sortBy === 'clicks') {
+          filteredLinks.sort((a, b) => b.clicks - a.clicks);
+        }
+
+        totalLinksCount += filteredLinks.length;
+        return { ...cat, links: filteredLinks };
+      });
+
+      document.getElementById('totalLinksBadge').textContent = `全 ${totalLinksCount} 個のリンク`;
+
+      const visibleCategories = filteredCategories.filter(cat => !(state.searchQuery && cat.links.length === 0));
+      const hasActiveTab = visibleCategories.some(cat => cat.name === state.activeTabName);
+
+      if (visibleCategories.length > 0) firstVisibleTabName = visibleCategories[0].name;
+      if (!hasActiveTab && firstVisibleTabName) state.activeTabName = firstVisibleTabName;
+
+      filteredCategories.forEach((cat, index) => {
+        if (state.searchQuery && cat.links.length === 0) return;
+
+        const isTabActive = state.activeTabName === cat.name;
+
+        const li = document.createElement('li');
+        li.className = 'nav-item';
+        li.role = 'presentation';
+        li.innerHTML = `
+          <button class="nav-link py-2 px-3 fw-bold ${isTabActive ? 'active' : ''}" 
+                  id="${cat.id}-tab" data-bs-toggle="pill" data-bs-target="#${cat.id}-panel" 
+                  type="button" role="tab" onclick="setActiveTab('${cat.name}')">
+            ${cat.name} <span class="badge bg-dark bg-opacity-25 ms-1 text-wrap">${cat.links.length}</span>
+          </button>
+        `;
+        tabsUl.appendChild(li);
+
+        const panel = document.createElement('div');
+        panel.className = `tab-pane fade ${isTabActive ? 'show active' : ''}`;
+        panel.id = `${cat.id}-panel`;
+        panel.role = 'tabpanel';
+
+        if (cat.links.length === 0) {
+          panel.innerHTML = `<div class="text-center py-5"><p class="text-muted">リンクがありません。</p></div>`;
+        } else {
+          if (state.layout === 'grid') {
+            // テーブル表示
+            let tableHtml = `
+              <div class="table-responsive">
+                <table class="table custom-table align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th style="width: 80px;">アイコン</th>
+                      <th style="width: 20%;">タイトル</th>
+                      <th style="width: 25%;">URL</th>
+                      <th style="width: 120px;">クリック数</th>
+                      <th style="width: 30%;">備考</th>
+                      <th style="width: 80px;" class="text-end">アクション</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+            `;
+            cat.links.forEach(link => {
+              const compiledNotes = link.notes ? marked.parse(link.notes) : '<span class="text-muted small">備考なし</span>';
+              const safeIcon = getSafeIcon(link.icon);
+              const hasImg = !!link.img;
+              
+              // ★ 常に<img>と<i>の両方を生成し、hasImgによって初期表示を切り替え（クラッシュバグを完全駆逐）
+              const visualCellContent = `
+                <img src="${link.img || ''}" class="${hasImg ? '' : 'd-none'}" style="width:36px; height:36px; object-fit:cover; border-radius:4px;" onload="this.classList.remove('d-none'); this.nextElementSibling.classList.add('d-none')" onerror="handleTableImageError(this)">
+                <i class="bi bi-${safeIcon} fs-5 ${hasImg ? 'd-none' : ''}"></i>
+              `;
+
+              tableHtml += `
+                <tr>
+                  <td class="icon-clickable" onclick="openIconPicker(${cat.originalIndex}, ${link.originalIndex})">
+                    <div class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 d-inline-flex position-relative icon-box" style="width:48px; height:48px; align-items:center; justify-content:center; overflow:hidden;">
+                      ${visualCellContent}
+                      <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-secondary border border-dark edit-badge" style="font-size: 0.55rem; padding: 0.2em 0.35em; z-index: 2;">
+                        <i class="bi bi-pencil-fill"></i>
+                      </span>
+                    </div>
+                  </td>
+                  <td><span class="fw-bold text-wrap text-dark-emphasis">${link.title}</span></td>
+                  <td>
+                    <a href="${link.url}" target="_blank" rel="noopener noreferrer" onclick="incrementClick('${link.url}')" class="text-muted small text-decoration-none d-inline-block text-truncate" style="max-width: 180px;" title="${link.url}">
+                      <i class="bi bi-link-45deg me-1"></i>${link.url}
+                    </a>
+                  </td>
+                  <td>
+                    <span class="badge bg-secondary bg-opacity-50 text-wrap py-2 px-3 fw-bold">
+                      <i class="bi bi-hand-index-thumb me-1"></i> ${link.clicks} 回
+                    </span>
+                  </td>
+                  <td><div class="small text-wrap notes-cell text-dark-emphasis">${compiledNotes}</div></td>
+                  <td class="text-end">
+                    <a href="${link.url}" target="_blank" rel="noopener noreferrer" onclick="incrementClick('${link.url}')" class="btn btn-sm btn-outline-primary rounded-pill px-3"><i class="bi bi-box-arrow-up-right me-1"></i>開く</a>
+                  </td>
+                </tr>
+              `;
+            });
+            tableHtml += `</tbody></table></div>`;
+            panel.innerHTML = tableHtml;
+          } else {
+            // ★ CSS Grid によるタイル表示（Bootstrap row から完璧に移行）
+            let tileHtml = `<div class="dynamic-tile-grid" style="--tile-cols: ${state.tileColumns};">`;
+            cat.links.forEach(link => {
+              const safeIcon = getSafeIcon(link.icon);
+              const hasImg = !!link.img;
+
+              // ★ 常に<img>と<i>の両方を生成し、hasImgによって初期表示を切り替え（クラッシュバグを完全駆逐）
+              const tileVisualContent = `
+                <img src="${link.img || ''}" class="tile-img ${hasImg ? '' : 'd-none'}" onload="this.classList.remove('d-none'); this.nextElementSibling.classList.add('d-none')" onerror="handleTileImageError(this)">
+                <i class="bi bi-${safeIcon} text-primary fs-2 ${hasImg ? 'd-none' : ''}"></i>
+              `;
+
+              tileHtml += `
+                <div class="col">
+                  <a href="${link.url}" target="_blank" rel="noopener noreferrer" onclick="incrementClick('${link.url}')" class="glass-card d-flex flex-column text-decoration-none h-100">
+                    <div class="tile-visual-box">
+                      ${tileVisualContent}
+                      <!-- タイル表示時のクリック数簡易バッジ (画像エラー時も絶対に破壊されません) -->
+                      <span class="position-absolute bottom-0 end-0 badge bg-dark bg-opacity-75 m-2 small py-1 px-2" style="font-size: 0.65rem; z-index: 2;">
+                        <i class="bi bi-hand-index-thumb"></i> ${link.clicks}
+                      </span>
+                    </div>
+                    <div class="p-3 text-center d-flex align-items-center justify-content-center flex-grow-1">
+                      <span class="fw-bold small text-wrap text-dark-emphasis w-100" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height:1.3;">
+                        ${link.title}
+                      </span>
+                    </div>
+                  </a>
+                </div>
+              `;
+            });
+            tileHtml += `</div>`;
+            panel.innerHTML = tileHtml;
+          }
+        }
+        tabContent.appendChild(panel);
+      });
+    }
+  </script>
+</body>
+</html>
