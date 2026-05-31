@@ -1096,10 +1096,10 @@
       return (!iconName || iconName === 'none') ? 'link-45deg' : iconName;
     }
 
-    function getScreenshotUrl(url, forceRefresh = false) {
+    function getScreenshotUrl(url, forceRefresh = false, nocapture = false) {
       if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
         if (state.autoScreenshotMode === 'local') {
-          return `http://localhost:3000/api/screenshot?url=${encodeURIComponent(url)}${forceRefresh ? '&refresh=true&t=' + Date.now() : ''}`;
+          return `http://localhost:3000/api/screenshot?url=${encodeURIComponent(url)}${forceRefresh ? '&refresh=true&t=' + Date.now() : ''}${nocapture ? '&nocapture=true' : ''}`;
         } else {
           return `https://image.thum.io/get/width/400/crop/800/${url}`;
         }
@@ -1255,8 +1255,10 @@
             cat.links.forEach(link => {
               const compiledNotes = link.notes ? marked.parse(link.notes) : '<span class="text-muted small">備考なし</span>';
               const safeIcon = getSafeIcon(link.icon);
-              const hasImg = !!link.img || (state.autoScreenshot && !!getScreenshotUrl(link.url));
-              const imgSrc = link.img || (state.autoScreenshot ? getScreenshotUrl(link.url) : '');
+              const isWebUrl = link.url && (link.url.startsWith('http://') || link.url.startsWith('https://'));
+              const hasLocalScreenshot = state.autoScreenshotMode === 'local' && isWebUrl;
+              const hasImg = !!link.img || state.autoScreenshot || hasLocalScreenshot;
+              const imgSrc = link.img || (state.autoScreenshot ? getScreenshotUrl(link.url) : (hasLocalScreenshot ? getScreenshotUrl(link.url, false, true) : ''));
               
               // ★ 常に<img>と<i>の両方を生成し、hasImgによって初期表示を切り替え（クラッシュバグを完全駆逐）
               const visualCellContent = `
@@ -1287,7 +1289,7 @@
                   </td>
                   <td><div class="small text-wrap notes-cell text-dark-emphasis">${compiledNotes}</div></td>
                   <td class="text-end">
-                    ${(state.autoScreenshot && state.autoScreenshotMode === 'local' && (link.url.startsWith('http://') || link.url.startsWith('https://'))) ? `
+                    ${(state.autoScreenshotMode === 'local' && (link.url.startsWith('http://') || link.url.startsWith('https://'))) ? `
                       <button class="btn btn-sm btn-outline-secondary rounded-pill me-1 px-2" title="スクリーンショットを更新" onclick="refreshScreenshot(event, '${link.url}', this)">
                         <i class="bi bi-arrow-clockwise"></i>
                       </button>
@@ -1304,8 +1306,10 @@
             let tileHtml = `<div class="dynamic-tile-grid" style="--tile-cols: ${state.tileColumns};">`;
             cat.links.forEach(link => {
               const safeIcon = getSafeIcon(link.icon);
-              const hasImg = !!link.img || (state.autoScreenshot && !!getScreenshotUrl(link.url));
-              const imgSrc = link.img || (state.autoScreenshot ? getScreenshotUrl(link.url) : '');
+              const isWebUrl = link.url && (link.url.startsWith('http://') || link.url.startsWith('https://'));
+              const hasLocalScreenshot = state.autoScreenshotMode === 'local' && isWebUrl;
+              const hasImg = !!link.img || state.autoScreenshot || hasLocalScreenshot;
+              const imgSrc = link.img || (state.autoScreenshot ? getScreenshotUrl(link.url) : (hasLocalScreenshot ? getScreenshotUrl(link.url, false, true) : ''));
 
               // ★ 常に<img>と<i>の両方を生成し、hasImgによって初期表示を切り替え（クラッシュバグを完全駆逐）
               const tileVisualContent = `
@@ -1323,7 +1327,7 @@
                         <i class="bi bi-hand-index-thumb"></i> ${link.clicks}
                       </span>
                       <!-- リフレッシュ（更新）ボタン -->
-                      ${(state.autoScreenshot && state.autoScreenshotMode === 'local' && (link.url.startsWith('http://') || link.url.startsWith('https://'))) ? `
+                      ${(state.autoScreenshotMode === 'local' && (link.url.startsWith('http://') || link.url.startsWith('https://'))) ? `
                         <button class="btn btn-sm btn-dark bg-opacity-75 text-white position-absolute top-0 start-0 m-2 border-0 rounded-circle d-flex align-items-center justify-content-center" style="width: 24px; height: 24px; padding: 0; z-index: 3;" title="スクリーンショットを更新" onclick="refreshScreenshot(event, '${link.url}', this)">
                           <i class="bi bi-arrow-clockwise" style="font-size: 0.75rem;"></i>
                         </button>

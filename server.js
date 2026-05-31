@@ -60,6 +60,7 @@ const server = http.createServer((req, res) => {
   if (pathname === '/api/screenshot') {
     const targetUrl = parsedUrl.query.url;
     const forceRefresh = parsedUrl.query.refresh === 'true';
+    const noCapture = parsedUrl.query.nocapture === 'true';
 
     if (!targetUrl) {
       res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -76,6 +77,13 @@ const server = http.createServer((req, res) => {
       if (fs.existsSync(filepath) && !forceRefresh) {
         res.writeHead(200, { 'Content-Type': 'image/png' });
         fs.createReadStream(filepath).pipe(res);
+        return;
+      }
+
+      // キャッシュが存在せず、かつ新規撮影を行わない（nocapture=true）場合は404を返す
+      if (noCapture) {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('キャッシュが見つかりません。新規撮影は無効化されています。');
         return;
       }
 
