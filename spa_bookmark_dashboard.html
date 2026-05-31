@@ -308,18 +308,12 @@
             </select>
           </div>
 
-          <!-- スクリーンショット自動取得トグル＆モード -->
-          <div class="d-flex align-items-center gap-2">
-            <div class="form-check form-switch d-flex align-items-center gap-2 mb-0">
-              <input class="form-check-input" type="checkbox" role="switch" id="autoScreenshotToggle" style="cursor: pointer;">
-              <label class="form-check-label small text-muted text-nowrap" for="autoScreenshotToggle" style="cursor: pointer;" title="画像が設定されていないブックマークのスクリーンショットを自動で取得して表示します。">
-                <i class="bi bi-camera-fill me-1"></i>スクショ自動取得
-              </label>
-            </div>
-            <select id="autoScreenshotModeSelect" class="form-select form-select-sm rounded-pill d-none" style="width: 105px; font-size: 0.75rem; padding: 0.25rem 1.5rem 0.25rem 0.75rem; cursor: pointer;">
-              <option value="local">ローカル</option>
-              <option value="cloud">クラウド</option>
-            </select>
+          <!-- スクリーンショット自動取得トグル -->
+          <div class="form-check form-switch d-flex align-items-center gap-2 mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="autoScreenshotToggle" style="cursor: pointer;">
+            <label class="form-check-label small text-muted text-nowrap" for="autoScreenshotToggle" style="cursor: pointer;" title="画像が設定されていないブックマークのスクリーンショットを自動で取得して表示します。">
+              <i class="bi bi-camera-fill me-1"></i>スクショ自動取得
+            </label>
           </div>
 
           <!-- エディタ/ダッシュボード 完全表示切り替えトグルボタン -->
@@ -543,7 +537,6 @@
       editorVisible: localStorage.getItem('bookmark_editor_visible') === 'true',
       sortBy: localStorage.getItem('bookmark_sort_by') || 'default',
       autoScreenshot: localStorage.getItem('bookmark_auto_screenshot') === 'true',
-      autoScreenshotMode: localStorage.getItem('bookmark_auto_screenshot_mode') || 'local',
       
       // 複数タブ間の競合管理用の内部状態
       pendingLatestMarkdown: null,
@@ -566,33 +559,10 @@
       sortSelect.value = state.sortBy;
       
       const autoScreenshotToggle = document.getElementById('autoScreenshotToggle');
-      const autoScreenshotModeSelect = document.getElementById('autoScreenshotModeSelect');
-
-      function updateModeSelectVisibility() {
-        if (autoScreenshotModeSelect) {
-          if (state.autoScreenshot) {
-            autoScreenshotModeSelect.classList.remove('d-none');
-          } else {
-            autoScreenshotModeSelect.classList.add('d-none');
-          }
-        }
-      }
-
       if (autoScreenshotToggle) {
         autoScreenshotToggle.checked = state.autoScreenshot;
-        updateModeSelectVisibility();
         autoScreenshotToggle.addEventListener('change', (e) => {
           state.autoScreenshot = e.target.checked;
-          updateModeSelectVisibility();
-          saveState();
-          renderDashboard();
-        });
-      }
-
-      if (autoScreenshotModeSelect) {
-        autoScreenshotModeSelect.value = state.autoScreenshotMode;
-        autoScreenshotModeSelect.addEventListener('change', (e) => {
-          state.autoScreenshotMode = e.target.value;
           saveState();
           renderDashboard();
         });
@@ -649,12 +619,6 @@
           state.autoScreenshot = e.newValue === 'true';
           const toggle = document.getElementById('autoScreenshotToggle');
           if (toggle) toggle.checked = state.autoScreenshot;
-          if (typeof updateModeSelectVisibility === 'function') updateModeSelectVisibility();
-          renderDashboard();
-        } else if (e.key === 'bookmark_auto_screenshot_mode') {
-          state.autoScreenshotMode = e.newValue || 'local';
-          const modeSelect = document.getElementById('autoScreenshotModeSelect');
-          if (modeSelect) modeSelect.value = state.autoScreenshotMode;
           renderDashboard();
         } else if (e.key === 'bookmark_bg_idx' || e.key === 'bookmark_bg_url' || e.key === 'bookmark_custom_bg') {
           state.bgIndex = parseInt(localStorage.getItem('bookmark_bg_idx') || '0');
@@ -748,7 +712,6 @@
       localStorage.setItem('bookmark_editor_visible', state.editorVisible);
       localStorage.setItem('bookmark_sort_by', state.sortBy);
       localStorage.setItem('bookmark_auto_screenshot', state.autoScreenshot);
-      localStorage.setItem('bookmark_auto_screenshot_mode', state.autoScreenshotMode);
       
       if (state.customBg) {
         try {
@@ -1098,11 +1061,7 @@
 
     function getScreenshotUrl(url, forceRefresh = false, nocapture = false) {
       if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-        if (state.autoScreenshotMode === 'local') {
-          return `http://localhost:3000/api/screenshot?url=${encodeURIComponent(url)}${forceRefresh ? '&refresh=true&t=' + Date.now() : ''}${nocapture ? '&nocapture=true' : ''}`;
-        } else {
-          return `https://image.thum.io/get/width/400/crop/800/${url}`;
-        }
+        return `http://localhost:3000/api/screenshot?url=${encodeURIComponent(url)}${forceRefresh ? '&refresh=true&t=' + Date.now() : ''}${nocapture ? '&nocapture=true' : ''}`;
       }
       return '';
     }
@@ -1256,9 +1215,8 @@
               const compiledNotes = link.notes ? marked.parse(link.notes) : '<span class="text-muted small">備考なし</span>';
               const safeIcon = getSafeIcon(link.icon);
               const isWebUrl = link.url && (link.url.startsWith('http://') || link.url.startsWith('https://'));
-              const hasLocalScreenshot = state.autoScreenshotMode === 'local' && isWebUrl;
-              const hasImg = !!link.img || state.autoScreenshot || hasLocalScreenshot;
-              const imgSrc = link.img || (state.autoScreenshot ? getScreenshotUrl(link.url) : (hasLocalScreenshot ? getScreenshotUrl(link.url, false, true) : ''));
+              const hasImg = !!link.img || isWebUrl;
+              const imgSrc = link.img || (state.autoScreenshot ? getScreenshotUrl(link.url) : (isWebUrl ? getScreenshotUrl(link.url, false, true) : ''));
               
               // ★ 常に<img>と<i>の両方を生成し、hasImgによって初期表示を切り替え（クラッシュバグを完全駆逐）
               const visualCellContent = `
@@ -1289,7 +1247,7 @@
                   </td>
                   <td><div class="small text-wrap notes-cell text-dark-emphasis">${compiledNotes}</div></td>
                   <td class="text-end">
-                    ${(state.autoScreenshotMode === 'local' && (link.url.startsWith('http://') || link.url.startsWith('https://'))) ? `
+                    ${isWebUrl ? `
                       <button class="btn btn-sm btn-outline-secondary rounded-pill me-1 px-2" title="スクリーンショットを更新" onclick="refreshScreenshot(event, '${link.url}', this)">
                         <i class="bi bi-arrow-clockwise"></i>
                       </button>
@@ -1307,9 +1265,8 @@
             cat.links.forEach(link => {
               const safeIcon = getSafeIcon(link.icon);
               const isWebUrl = link.url && (link.url.startsWith('http://') || link.url.startsWith('https://'));
-              const hasLocalScreenshot = state.autoScreenshotMode === 'local' && isWebUrl;
-              const hasImg = !!link.img || state.autoScreenshot || hasLocalScreenshot;
-              const imgSrc = link.img || (state.autoScreenshot ? getScreenshotUrl(link.url) : (hasLocalScreenshot ? getScreenshotUrl(link.url, false, true) : ''));
+              const hasImg = !!link.img || isWebUrl;
+              const imgSrc = link.img || (state.autoScreenshot ? getScreenshotUrl(link.url) : (isWebUrl ? getScreenshotUrl(link.url, false, true) : ''));
 
               // ★ 常に<img>と<i>の両方を生成し、hasImgによって初期表示を切り替え（クラッシュバグを完全駆逐）
               const tileVisualContent = `
@@ -1327,7 +1284,7 @@
                         <i class="bi bi-hand-index-thumb"></i> ${link.clicks}
                       </span>
                       <!-- リフレッシュ（更新）ボタン -->
-                      ${(state.autoScreenshotMode === 'local' && (link.url.startsWith('http://') || link.url.startsWith('https://'))) ? `
+                      ${isWebUrl ? `
                         <button class="btn btn-sm btn-dark bg-opacity-75 text-white position-absolute top-0 start-0 m-2 border-0 rounded-circle d-flex align-items-center justify-content-center" style="width: 24px; height: 24px; padding: 0; z-index: 3;" title="スクリーンショットを更新" onclick="refreshScreenshot(event, '${link.url}', this)">
                           <i class="bi bi-arrow-clockwise" style="font-size: 0.75rem;"></i>
                         </button>

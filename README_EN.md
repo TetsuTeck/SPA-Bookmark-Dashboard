@@ -9,7 +9,7 @@ With a local-first design, all your registered links and customized settings are
 
 * **Single-File Architecture (SPA)**: Zero installation or server setup required. Simply open the single HTML file in any browser to get a blazing-fast dashboard.
 * **Local Auto-Screenshot Capture (New!)**: Automatically generates and caches website homepages locally inside your project folder using a local headless Google Chrome browser—bypassing any third-party API limits or costs.
-* **Dual-Tier Ultra-Wide Search Bar**: Leverages 100% of the screen width to perform instant, cross-sectional incremental searches across titles, URLs, and notes.
+* **Dual-Tier Ultra-Wide Search Bar**: Leverages 100% of the screen width to perform incremental searches across titles, URLs, and notes.
 * **Hybrid Multi-Layout System**: Instantly switch between "Grid View (Table)" for detailed management and "Tile View (Visual Card)" for a clean, graphical layout.
 * **Individual Card Images & Custom Visuals**: Supports setting unique images (Web URLs or local relative paths) for each tile. Images automatically fit beautifully using `object-fit: cover`.
 * **Robust Error Fallback**: If an image link is broken or a local path is temporarily missing, the system automatically detects the error and falls back to a clean Bootstrap Icon without breaking the layout.
@@ -22,9 +22,9 @@ With a local-first design, all your registered links and customized settings are
 
 ## 📸 Automatic Screenshot Capture Feature
 
-This application includes a feature to automatically capture screenshots of bookmarked websites and render them as tile images when no custom image is specified. You can choose between two modes:
+This application includes a feature to automatically capture screenshots of bookmarked websites and render them as cached tile images when no custom image is specified.
 
-### 1. Local Mode (Recommended - 100% Free & Unlimited)
+### Benefits (100% Free & Unlimited)
 Saves and caches screenshots inside a local `./screenshots/` directory. It uses your PC's local headless Google Chrome to capture the screen, bypassing any external API limits and ensuring complete privacy.
 
 * **Prerequisites**: Node.js and Google Chrome must be installed on your PC.
@@ -34,22 +34,19 @@ Saves and caches screenshots inside a local `./screenshots/` directory. It uses 
      node server.js
      ```
   2. Open your preferred browser and visit `http://localhost:3000`.
-  3. Turn on the **"スクショ自動取得" (Auto Screenshot)** toggle switch and select **"ローカル" (Local)**.
+  3. Turn on the **"スクショ自動取得" (Auto Screenshot)** toggle switch.
   4. Screenshots will be automatically captured, cached inside the `./screenshots/` folder, and served.
-  5. **On-Demand Recapture**: Click the circular refresh icon on the top-left of the tile (or on the table row) to trigger a headless Chrome recapture and instantly refresh the screenshot on-demand.
-
-### 2. Cloud Mode (Thum.io Fallback)
-Uses the public `Thum.io` website screenshot API to dynamically render homepages even without running the local server or when opening the HTML directly (via `file:///`). (Subject to Thum.io's standard monthly limits).
+  5. **On-Demand Capture**: Even when the global switch is off, click the circular refresh icon on the top-left of the tile (or on the table row) to trigger a headless Chrome recapture and instantly refresh the screenshot on-demand.
 
 ---
 
 ## 🚀 How to Use
 
 ### 1. Launching the App
-* **Via Local Server (Recommended - enables full local screenshot capabilities)**:
+* **Via Local Server (Recommended - enables local screenshot capabilities)**:
   1. Open your terminal, run `node server.js`, and open `http://localhost:3000` in your browser.
 * **Standalone Static File**:
-  1. Download `spa_bookmark_dashboard.html` from this repository and double-click to open it directly in any preferred browser.
+  1. Download `spa_bookmark_dashboard.html` from this repository and double-click to open it directly in any preferred browser. (Note: Automatic screenshots are not available in standalone mode).
 
 ### 2. Managing & Adding Bookmarks
 1. Click the **"Open Editor"** button in the top-right corner.
