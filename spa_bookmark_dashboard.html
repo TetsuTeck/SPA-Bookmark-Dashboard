@@ -241,6 +241,15 @@
     ::-webkit-scrollbar-thumb:hover {
       background: rgba(255, 255, 255, 0.3);
     }
+
+    /* 警告表示などのフェードインアニメーション */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
   </style>
 </head>
 <body id="bodyBg">
@@ -359,6 +368,20 @@
             <i class="bi bi-info-circle-fill me-1"></i> <strong>書き方のコツ：</strong> 
             <code># カテゴリ名</code> でタブ作成 | 
             <code>- [タイトル](URL) {icon: アイコン名} {img: 画像URL/Base64} : 備考</code> でリンクを作成。
+          </div>
+
+          <!-- 競合警告アラート（他タブでの変更検知時に表示） -->
+          <div class="alert alert-warning py-2 px-3 mb-3 flex-shrink-0 d-none align-items-center justify-content-between shadow-sm animate-fade-in" id="conflictAlert">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
+              <span class="small">
+                <strong>⚠️ 競合注意：</strong> 他のタブまたはウィンドウでブックマークデータが更新されました。
+              </span>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-warning rounded-pill px-3 text-dark fw-bold" style="font-size: 0.75rem;" onclick="resolveConflictLoadLatest()">最新データをロード</button>
+              <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" style="font-size: 0.75rem;" onclick="resolveConflictKeepCurrent()">現在の編集を維持</button>
+            </div>
           </div>
 
           <!-- エディタ本体 -->
@@ -504,7 +527,11 @@
       tileColumns: parseInt(localStorage.getItem('bookmark_tile_columns') || '4'), 
       searchQuery: '',
       editorVisible: localStorage.getItem('bookmark_editor_visible') === 'true',
-      sortBy: localStorage.getItem('bookmark_sort_by') || 'default'
+      sortBy: localStorage.getItem('bookmark_sort_by') || 'default',
+      
+      // 複数タブ間の競合管理用の内部状態
+      pendingLatestMarkdown: null,
+      isConflictActive: false
     };
 
     let currentTarget = { catIndex: null, linkIndex: null };
@@ -525,7 +552,8 @@
       // イベントリスナー
       markdownInput.addEventListener('input', (e) => {
         state.markdown = e.target.value;
-        saveState();
+        hideConflictAlert(); // ユーザー自身が入力を進めた場合は競合警告を一時非表示に
+        saveState(true); // エディタ入力時は即上書き保存
         renderDashboard();
       });
 
@@ -559,6 +587,40 @@
         saveState();
         updateTileColumnsState();
         renderDashboard();
+      });
+
+      // 複数タブ間のリアルタイム同期を実現する storage イベント監視
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'bookmark_md') {
+          handleMarkdownStorageUpdate(e.newValue);
+        } else if (e.key === 'bookmark_theme') {
+          state.theme = e.newValue;
+          applyTheme();
+        } else if (e.key === 'bookmark_bg_idx' || e.key === 'bookmark_bg_url' || e.key === 'bookmark_custom_bg') {
+          state.bgIndex = parseInt(localStorage.getItem('bookmark_bg_idx') || '0');
+          state.bgUrl = localStorage.getItem('bookmark_bg_url') || 'none';
+          state.customBg = localStorage.getItem('bookmark_custom_bg') || '';
+          applyBg();
+        } else if (e.key === 'bookmark_layout') {
+          state.layout = e.newValue;
+          if (state.layout === 'tile') {
+            document.getElementById('modeTile').checked = true;
+          } else {
+            document.getElementById('modeGrid').checked = true;
+          }
+          updateTileColumnsState();
+          renderDashboard();
+        } else if (e.key === 'bookmark_tile_columns') {
+          state.tileColumns = parseInt(e.newValue || '4');
+          document.getElementById('tileColumnsSelect').value = state.tileColumns;
+          renderDashboard();
+        } else if (e.key === 'bookmark_sort_by') {
+          state.sortBy = e.newValue || 'default';
+          document.getElementById('sortSelect').value = state.sortBy;
+          renderDashboard();
+        } else if (e.key === 'bookmark_clicks') {
+          renderDashboard();
+        }
       });
 
       iconSearchInput.addEventListener('input', (e) => {
@@ -599,11 +661,24 @@
       });
     });
 
-    function saveState() {
+    function saveState(skipMarkdownSync = false) {
       const statusSpan = document.getElementById('saveStatus');
       statusSpan.innerHTML = `<i class="bi bi-arrow-repeat text-warning spinner-border spinner-border-sm" role="status"></i> 保存中...`;
       
-      localStorage.setItem('bookmark_md', state.markdown);
+      // 防御的対策: 他のタブがLocalStorageのMarkdownを更新している可能性があるため
+      // エディタでの直接入力時(skipMarkdownSync=true)以外は、LocalStorageから最新のMarkdownを読み込んで同期してから保存する
+      if (skipMarkdownSync) {
+        localStorage.setItem('bookmark_md', state.markdown);
+      } else {
+        const latestMd = localStorage.getItem('bookmark_md');
+        if (latestMd !== null && latestMd !== state.markdown) {
+          state.markdown = latestMd;
+          const markdownInput = document.getElementById('markdownInput');
+          if (markdownInput) markdownInput.value = state.markdown;
+        }
+        localStorage.setItem('bookmark_md', state.markdown);
+      }
+      
       localStorage.setItem('bookmark_theme', state.theme);
       localStorage.setItem('bookmark_bg_idx', state.bgIndex);
       localStorage.setItem('bookmark_bg_url', state.bgUrl);
@@ -628,6 +703,67 @@
       setTimeout(() => {
         statusSpan.innerHTML = `<i class="bi bi-cloud-check-fill text-success"></i> 自動保存済み`;
       }, 400);
+    }
+
+    // 他タブからのMarkdown更新検知・同期ロジック
+    function handleMarkdownStorageUpdate(newValue) {
+      const markdownInput = document.getElementById('markdownInput');
+      const currentValue = markdownInput ? markdownInput.value : state.markdown;
+      
+      if (newValue === currentValue) return;
+
+      // エディタが表示されている場合、入力中の内容を破壊しないよう競合アラートを出す
+      if (state.editorVisible) {
+        state.pendingLatestMarkdown = newValue;
+        state.isConflictActive = true;
+        showConflictAlert();
+      } else {
+        // エディタが非表示なら自動で安全に同期してレンダリング
+        state.markdown = newValue;
+        if (markdownInput) markdownInput.value = newValue;
+        hideConflictAlert();
+        renderDashboard();
+      }
+    }
+
+    function showConflictAlert() {
+      const alertDiv = document.getElementById('conflictAlert');
+      if (alertDiv) {
+        alertDiv.classList.remove('d-none');
+        alertDiv.classList.add('d-flex');
+      }
+    }
+
+    function hideConflictAlert() {
+      const alertDiv = document.getElementById('conflictAlert');
+      if (alertDiv) {
+        alertDiv.classList.remove('d-flex');
+        alertDiv.classList.add('d-none');
+      }
+      state.isConflictActive = false;
+      state.pendingLatestMarkdown = null;
+    }
+
+    function resolveConflictLoadLatest() {
+      if (state.pendingLatestMarkdown !== null) {
+        state.markdown = state.pendingLatestMarkdown;
+        const markdownInput = document.getElementById('markdownInput');
+        if (markdownInput) markdownInput.value = state.markdown;
+        hideConflictAlert();
+        renderDashboard();
+        
+        const statusSpan = document.getElementById('saveStatus');
+        statusSpan.innerHTML = `<i class="bi bi-cloud-check-fill text-success"></i> 最新データを同期しました`;
+      }
+    }
+
+    function resolveConflictKeepCurrent() {
+      // 現在のエディタ上の内容を正として上書き保存する
+      hideConflictAlert();
+      saveState(true);
+      
+      const statusSpan = document.getElementById('saveStatus');
+      statusSpan.innerHTML = `<i class="bi bi-cloud-check-fill text-success"></i> 現在の編集を優先して保存しました`;
     }
 
     function toggleTheme() {
@@ -869,7 +1005,7 @@
         categories[currentTarget.catIndex].links[currentTarget.linkIndex].icon = iconName;
         state.markdown = serializeDataToMarkdown(categories);
         document.getElementById('markdownInput').value = state.markdown;
-        saveState();
+        saveState(true); // Markdownの直接書き換えのため同期をスキップして保存
         renderDashboard();
         const modal = bootstrap.Modal.getInstance(document.getElementById('iconPickerModal'));
         if (modal) modal.hide();
