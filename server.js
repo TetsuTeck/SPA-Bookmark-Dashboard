@@ -8,6 +8,7 @@ const urlModule = require('url');
 const PORT = 3000;
 const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots');
 const SPA_FILE = path.join(__dirname, 'spa_bookmark_dashboard.html');
+const BOOKMARKS_FILE = path.join(__dirname, 'bookmarks.md');
 const CHROME_PATH = `"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"`;
 
 // screenshotsディレクトリの自動作成
@@ -18,7 +19,7 @@ if (!fs.existsSync(SCREENSHOTS_DIR)) {
 const server = http.createServer((req, res) => {
   // CORS ヘッダーの付与（file:///等からのクロスドメインアクセスも許容）
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
@@ -104,6 +105,40 @@ const server = http.createServer((req, res) => {
       console.error(`[Error] キャプチャ失敗 (${targetUrl}):`, error.message);
       res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end(`スクリーンショットの取得に失敗しました: ${error.message}`);
+    }
+    return;
+  }
+
+  // 4. ブックマーク保存・取得API
+  if (pathname === '/api/bookmarks') {
+    if (req.method === 'GET') {
+      if (fs.existsSync(BOOKMARKS_FILE)) {
+        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+        fs.createReadStream(BOOKMARKS_FILE).pipe(res);
+      } else {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('bookmarks.md が存在しません。');
+      }
+    } else if (req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => {
+        body += chunk.toString();
+      });
+      req.on('end', () => {
+        try {
+          fs.writeFileSync(BOOKMARKS_FILE, body, 'utf8');
+          console.log(`[Bookmarks] 保存完了: ${BOOKMARKS_FILE}`);
+          res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('保存完了しました。');
+        } catch (error) {
+          console.error(`[Error] 保存失敗:`, error.message);
+          res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end(`保存に失敗しました: ${error.message}`);
+        }
+      });
+    } else {
+      res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Method Not Allowed');
     }
     return;
   }

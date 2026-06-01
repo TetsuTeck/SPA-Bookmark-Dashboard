@@ -846,6 +846,9 @@
       updateTileColumnsState();
       renderDashboard();
 
+      // 外部サーバーからのブックマークデータ取得と初回自動移行
+      loadBookmarksFromServer();
+
       document.getElementById('bgThumb4').addEventListener('contextmenu', (e) => {
         e.preventDefault();
         if (state.customBg && confirm('アップロードしたカスタム背景画像をクリアしますか？')) {
@@ -859,6 +862,89 @@
         }
       });
     });
+
+    let lastSavedMarkdown = state.markdown;
+    let serverSaveTimeout = null;
+
+    async function loadBookmarksFromServer() {
+      const apiBase = window.location.protocol.startsWith('http') ? window.location.origin : 'http://localhost:3000';
+      try {
+        const response = await fetch(`${apiBase}/api/bookmarks`);
+        if (response.ok) {
+          const text = await response.text();
+          state.markdown = text;
+          lastSavedMarkdown = text;
+          
+          const markdownInput = document.getElementById('markdownInput');
+          if (markdownInput) markdownInput.value = state.markdown;
+          
+          localStorage.setItem('bookmark_md', state.markdown);
+          renderDashboard();
+          console.log('Bookmarks loaded from server.');
+        } else if (response.status === 404) {
+          // bookmarks.md がサーバーに存在しない場合は、現在の localStorage のデータで自動初期作成
+          console.log('bookmarks.md not found on server, uploading current localStorage content as initial bookmarks...');
+          const success = await saveBookmarksToServer(state.markdown);
+          if (success) {
+            lastSavedMarkdown = state.markdown;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not connect to server to load bookmarks. Operating in local-only mode:', err);
+      }
+    }
+
+    function triggerServerSave(markdown) {
+      if (markdown === lastSavedMarkdown) return;
+      
+      const statusSpan = document.getElementById('saveStatus');
+      if (statusSpan) {
+        statusSpan.innerHTML = `<i class="bi bi-arrow-repeat text-warning spinner-border spinner-border-sm" role="status"></i> 外部同期中...`;
+      }
+
+      if (serverSaveTimeout) clearTimeout(serverSaveTimeout);
+      serverSaveTimeout = setTimeout(async () => {
+        const success = await saveBookmarksToServer(markdown);
+        if (success) {
+          lastSavedMarkdown = markdown;
+        }
+      }, 1000); // 1秒デバウンス
+    }
+
+    async function saveBookmarksToServer(markdown) {
+      const apiBase = window.location.protocol.startsWith('http') ? window.location.origin : 'http://localhost:3000';
+      try {
+        const response = await fetch(`${apiBase}/api/bookmarks`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8'
+          },
+          body: markdown
+        });
+        if (response.ok) {
+          console.log('Bookmarks saved to server successfully.');
+          const statusSpan = document.getElementById('saveStatus');
+          if (statusSpan) {
+            statusSpan.innerHTML = `<i class="bi bi-cloud-check-fill text-success"></i> 自動保存済み (外部ファイル同期完了)`;
+          }
+          return true;
+        } else {
+          console.error('Failed to save bookmarks to server:', response.statusText);
+          const statusSpan = document.getElementById('saveStatus');
+          if (statusSpan) {
+            statusSpan.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-danger"></i> 外部保存失敗`;
+          }
+          return false;
+        }
+      } catch (err) {
+        console.error('Failed to save bookmarks to server:', err);
+        const statusSpan = document.getElementById('saveStatus');
+        if (statusSpan) {
+          statusSpan.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-danger"></i> サーバー接続エラー`;
+        }
+        return false;
+      }
+    }
 
     function saveState(skipMarkdownSync = false) {
       const statusSpan = document.getElementById('saveStatus');
@@ -900,8 +986,18 @@
         localStorage.removeItem('bookmark_custom_bg');
       }
 
+      // 外部サーバーへの保存処理を呼び出す
+      triggerServerSave(state.markdown);
+
       setTimeout(() => {
-        statusSpan.innerHTML = `<i class="bi bi-cloud-check-fill text-success"></i> 自動保存済み`;
+        const statusSpan = document.getElementById('saveStatus');
+        if (statusSpan) {
+          if (state.markdown !== lastSavedMarkdown) {
+            statusSpan.innerHTML = `<i class="bi bi-arrow-repeat text-warning spinner-border spinner-border-sm" role="status"></i> 外部同期中...`;
+          } else {
+            statusSpan.innerHTML = `<i class="bi bi-cloud-check-fill text-success"></i> 自動保存済み (外部ファイル同期完了)`;
+          }
+        }
       }, 400);
     }
 
