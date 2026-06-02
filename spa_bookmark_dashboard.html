@@ -1400,6 +1400,11 @@
       localStorage.setItem('bookmark_clicks', JSON.stringify(clicks));
       renderDashboard();
     }
+
+    function setActiveTab(tabName) {
+      state.activeTabName = tabName;
+      saveState();
+    }
   </script>
 
   <!-- HTML描画ロジック -->
